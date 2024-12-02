@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>骨盆紀錄管理</title>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+  <style>
+    body {
+      background-color: #add8e6;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    .container {
+      text-align: center;
+      background-color: #ffffff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      width: 90%; /* 拉寬容器 */
+      max-width: 800px; /* 最大寬度設為800px */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    button {
+      margin: 10px;
+      padding: 10px 20px;
+      border: none;
+      background-color: #007bff;
+      color: white;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .note-container {
+      display: none;
+      margin-top: 20px;
+      width: 100%;
+    }
+
+    .form-group {
+      margin-bottom: 10px;
+    }
+
+    .form-group input, .form-group textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .note-list {
+      margin-top: 20px;
+    }
+
+    .note-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0, 0, 0, 0.4);
+    }
+
+    .modal-content {
+      background-color: #fefefe;
+      margin: 15% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      border-radius: 10px;
+      width: 80%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .close:hover,
+    .close:focus {
+      color: black;
+      text-decoration: none;
+    }
+
+    .user-avatar {
+      width: 150px;  /* 調整圖片大小 */
+      height: 150px; /* 調整圖片大小 */
+      border-radius: 50%;
+      object-fit: cover;
+      margin-bottom: 15px;
+    }
+
+    /* 編輯筆記Modal樣式 */
+    #editNoteModal {
+      display: none;
+    }
+
+    .form-group input, .form-group textarea {
+      margin-bottom: 10px;
+    }
+
+    /* 額外照片樣式 */
+    #extraPhoto {
+      display: none;
+      margin-top: 20px;
+    }
+
+    #extraImage {
+      width: 100%;
+      max-width: 400px;
+      height: auto;
+      border-radius: 8px;
+    }
+
+    /* 版面配置：左右佈局 */
+    .content-wrapper {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+    }
+
+    .left-section, .right-section {
+      flex: 1;
+    }
+
+    .right-section {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>弱色醫院</h1>
+    <button id="registerBtn">註冊</button>
+    <button id="loginBtn">登入</button>
+    <button id="userInfoBtn" style="display: none;">會員資訊</button>
+
+    <div class="content-wrapper">
+      <div class="left-section">
+        <div class="note-container" id="noteContainer">
+          <h2>骨頭紀錄</h2>
+          <div class="form-group">
+            <input type="text" id="noteTitle" placeholder="輸入標題">
+          </div>
+          <div class="form-group">
+            <textarea id="noteContent" placeholder="輸入內容"></textarea>
+          </div>
+          <button id="addNoteBtn">新增記錄</button>
+
+          <h3>詳細資訊</h3>
+          <div id="noteList" class="note-list"></div>
+        </div>
+      </div>
+
+      <div class="right-section">
+        <!-- 顯示額外照片的區域 -->
+        <div id="extraPhoto">
+          <img id="extraImage" src="1.jpg" alt="額外照片">
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 會員資訊Modal -->
+  <div id="userModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeModal">&times;</span>
+      <h2>會員資訊</h2>
+      <img id="userAvatar" class="user-avatar" src="" alt="用戶頭像">
+      <p id="userName"></p>
+      <p id="userEmail"></p>
+      <p id="registerTime"></p>
+    </div>
+  </div>
+  <!-- 編輯筆記Modal -->
+  <div id="editNoteModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeEditNoteModal">&times;</span>
+      <h3>編輯筆記</h3>
+      <div class="form-group">
+        <input type="text" id="editNoteTitle" placeholder="修改標題">
+      </div>
+      <div class="form-group">
+        <textarea id="editNoteContent" placeholder="修改內容"></textarea>
+      </div>
+      <button id="saveNoteBtn">儲存修改</button>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAaJNoqjf5-aDarREPQE8G31tUF6BFaDAc",
+      authDomain: "ggwp123-6597b.firebaseapp.com",
+      databaseURL: "https://ggwp123-6597b-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "ggwp123-6597b",
+      storageBucket: "ggwp123-6597b.firebasestorage.app",
+      messagingSenderId: "205409889363",
+      appId: "1:205409889363:web:787ffd1c0e0ba01ebc2aa6"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const database = firebase.database();
+
+    const registerBtn = document.getElementById("registerBtn");
+    const loginBtn = document.getElementById("loginBtn");
+    const userInfoBtn = document.getElementById("userInfoBtn");
+    const closeModal = document.getElementById("closeModal");
+    const noteContainer = document.getElementById("noteContainer");
+    const addNoteBtn = document.getElementById("addNoteBtn");
+    const noteList = document.getElementById("noteList");
+    const noteTitle = document.getElementById("noteTitle");
+    const noteContent = document.getElementById("noteContent");
+    const userName = document.getElementById("userName");
+    const userEmail = document.getElementById("userEmail");
+    const registerTime = document.getElementById("registerTime");
+    const userAvatar = document.getElementById("userAvatar");
+    const userModal = document.getElementById("userModal");
+    const closeEditNoteModal = document.getElementById("closeEditNoteModal");
+    const editNoteModal = document.getElementById("editNoteModal");
+    const editNoteTitle = document.getElementById("editNoteTitle");
+    const editNoteContent = document.getElementById("editNoteContent");
+    const saveNoteBtn = document.getElementById("saveNoteBtn");
+
+    const extraPhoto = document.getElementById("extraPhoto"); // 額外照片元素
+
+    let currentUser = null;
+    let editingNoteId = null;
+
+    registerBtn.addEventListener("click", () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
+        .then(result => {
+          const user = result.user;
+          const userRef = database.ref('users/' + user.uid);
+
+          userRef.once('value').then(snapshot => {
+            if (!snapshot.exists()) {
+              userRef.set({
+                name: user.displayName,
+                email: user.email,
+                registerTime: new Date().toISOString()
+              });
+              alert("註冊成功！");
+            } else {
+              alert("此帳戶已註冊！");
+            }
+          });
+        })
+        .catch(error => {
+          console.error("註冊失敗:", error);
+          alert("註冊失敗，請稍後再試！");
+        });
+    });
+
+    loginBtn.addEventListener("click", () => {
+      if (currentUser) {
+        // 已登入，登出
+        auth.signOut().then(() => {
+          currentUser = null;
+          loginBtn.textContent = "登入";
+          registerBtn.style.display = "inline-block";
+          userInfoBtn.style.display = "none";
+          noteContainer.style.display = "none";
+          extraPhoto.style.display = "none"; // 登出時隱藏額外照片
+          alert("已登出！");
+        }).catch(error => {
+          console.error("登出失敗:", error);
+          alert("登出失敗，請稍後再試！");
+        });
+      } else {
+        // 未登入，執行登入
+        const provider = new firebase.auth.GoogleAuthProvider();
+        auth.signInWithPopup(provider)
+          .then(result => {
+            currentUser = result.user;
+            loginBtn.textContent = "登出";
+            registerBtn.style.display = "none";
+            userInfoBtn.style.display = "inline-block";
+            noteContainer.style.display = "block";
+            extraPhoto.style.display = "block"; // 登入後顯示額外照片
+            loadNotes();
+          })
+          .catch(error => {
+            console.error("登入失敗:", error);
+            alert("登入失敗，請稍後再試！");
+          });
+      }
+    });
+
+    userInfoBtn.addEventListener("click", () => {
+      if (currentUser) {
+        showUserInfo();
+      }
+    });
+
+    closeModal.addEventListener("click", () => {
+      userModal.style.display = "none";
+    });
+
+    window.addEventListener("click", (event) => {
+      if (event.target == userModal) {
+        userModal.style.display = "none";
+      }
+      if (event.target == editNoteModal) {
+        editNoteModal.style.display = "none";
+      }
+    });
+
+    function showUserInfo() {
+      userName.textContent = `姓名: ${currentUser.displayName}`;
+      userEmail.textContent = `電子郵件: ${currentUser.email}`;
+      registerTime.textContent = `註冊時間: ${new Date(currentUser.metadata.creationTime).toLocaleString()}`;
+      userAvatar.src = currentUser.photoURL || 'https://www.gravatar.com/avatar/?d=mp';
+
+      userModal.style.display = "block";
+    }
+
+    function loadNotes() {
+      const notesRef = database.ref('notes/' + currentUser.uid);
+      notesRef.on('value', snapshot => {
+        noteList.innerHTML = '';
+        snapshot.forEach(childSnapshot => {
+          const note = childSnapshot.val();
+          const noteId = childSnapshot.key;
+          const noteElement = document.createElement('div');
+          noteElement.classList.add('note-item');
+          noteElement.innerHTML = `
+            <div>
+              <strong>${note.title}</strong><br>
+              ${note.content}
+            </div>
+            <div>
+              <button onclick="editNote('${noteId}')">編輯</button>
+              <button onclick="deleteNote('${noteId}')">刪除</button>
+            </div>
+          `;
+          noteList.appendChild(noteElement);
+        });
+      });
+    }
+
+    function editNote(noteId) {
+      const notesRef = database.ref('notes/' + currentUser.uid + '/' + noteId);
+      notesRef.once('value').then(snapshot => {
+        const note = snapshot.val();
+        editNoteTitle.value = note.title;
+        editNoteContent.value = note.content;
+        editingNoteId = noteId;
+
+        editNoteModal.style.display = "block";
+      }).catch(error => {
+        console.error("取得筆記失敗:", error);
+        alert("無法取得筆記，請稍後再試！");
+      });
+    }
+
+    saveNoteBtn.addEventListener("click", () => {
+      const newTitle = editNoteTitle.value.trim();
+      const newContent = editNoteContent.value.trim();
+
+      if (newTitle && newContent) {
+        const notesRef = database.ref('notes/' + currentUser.uid + '/' + editingNoteId);
+        notesRef.update({
+          title: newTitle,
+          content: newContent
+        }).then(() => {
+          editNoteModal.style.display = "none";
+        }).catch(error => {
+          console.error("更新筆記失敗:", error);
+          alert("無法更新筆記，請稍後再試！");
+        });
+      } else {
+        alert("請輸入標題和內容！");
+      }
+    });
+
+    function deleteNote(noteId) {
+      if (confirm("確定要刪除此筆記嗎？")) {
+        const notesRef = database.ref('notes/' + currentUser.uid + '/' + noteId);
+        notesRef.remove().catch(error => {
+          console.error("刪除筆記失敗:", error);
+          alert("無法刪除筆記，請稍後再試！");
+        });
+      }
+    }
+
+    addNoteBtn.addEventListener("click", () => {
+      const title = noteTitle.value.trim();
+      const content = noteContent.value.trim();
+
+      if (title && content) {
+        const notesRef = database.ref('notes/' + currentUser.uid);
+        const newNoteRef = notesRef.push();
+        newNoteRef.set({
+          title: title,
+          content: content
+        }).then(() => {
+          noteTitle.value = '';
+          noteContent.value = '';
+        }).catch(error => {
+          console.error("新增筆記失敗:", error);
+          alert("無法新增筆記，請稍後再試！");
+        });
+      } else {
+        alert("請輸入標題和內容！");
+      }
+    });
+  </script>
+</body>
+</html>
